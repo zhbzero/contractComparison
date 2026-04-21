@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word 文档差异分析</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+    .container {
+      max-width: 960px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+      padding: 20px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 24px;
+    }
+    .desc {
+      margin: 0 0 20px;
+      color: #475569;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .dropzone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 10px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: #fafcff;
+    }
+    .dropzone.dragover {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .file-name {
+      margin-top: 10px;
+      color: #334155;
+      font-size: 14px;
+      word-break: break-all;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .file-name.selected {
+      background: #dcfce7;
+      border-color: #86efac;
+      color: #166534;
+    }
+    .row {
+      margin-top: 16px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .row label {
+      font-size: 14px;
+      color: #334155;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 320px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 14px;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .error { color: #b91c1c; }
+    .ok { color: #166534; }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      input[type="text"] { min-width: 200px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Word 文档差异分析</h1>
+      <p class="desc">上传两份 docx Word 文档（第一版和第二版），点击开始分析后将结果保存到指定目录。</p>
+
+      <div class="grid">
+        <div>
+          <div id="dropA" class="dropzone">拖拽或点击上传第一份文档（基准版）</div>
+          <input id="fileA" type="file" accept=".docx" hidden />
+          <div id="nameA" class="file-name">未选择文件</div>
+        </div>
+        <div>
+          <div id="dropB" class="dropzone">拖拽或点击上传第二份文档（修改版）</div>
+          <input id="fileB" type="file" accept=".docx" hidden />
+          <div id="nameB" class="file-name">未选择文件</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label for="outputDir">结果保存目录：</label>
+        <input id="outputDir" type="text" placeholder="默认当前程序所在目录" />
+      </div>
+
+      <div class="row">
+        <button id="submitBtn" type="button">开始分析</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    const fileA = document.getElementById("fileA");
+    const fileB = document.getElementById("fileB");
+    const dropA = document.getElementById("dropA");
+    const dropB = document.getElementById("dropB");
+    const nameA = document.getElementById("nameA");
+    const nameB = document.getElementById("nameB");
+    const outputDir = document.getElementById("outputDir");
+    const statusEl = document.getElementById("status");
+    const submitBtn = document.getElementById("submitBtn");
+
+    function setStatus(message, ok) {
+      statusEl.textContent = message;
+      statusEl.className = `status ${ok ? "ok" : "error"}`;
+    }
+
+    function bindDrop(dropEl, inputEl, nameEl) {
+      dropEl.addEventListener("click", () => inputEl.click());
+      inputEl.addEventListener("change", () => {
+        if (inputEl.files?.[0]) {
+          nameEl.textContent = inputEl.files[0].name;
+          nameEl.classList.add("selected");
+        } else {
+          nameEl.textContent = "未选择文件";
+          nameEl.classList.remove("selected");
+        }
+      });
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropEl.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropEl.classList.add("dragover");
+        });
+      });
+
+      ["dragleave", "drop"].forEach((eventName) => {
+        dropEl.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dropEl.classList.remove("dragover");
+        });
+      });
+
+      dropEl.addEventListener("drop", (e) => {
+        const files = e.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+        const dt = new DataTransfer();
+        dt.items.add(files[0]);
+        inputEl.files = dt.files;
+        nameEl.textContent = inputEl.files[0].name;
+        nameEl.classList.add("selected");
+      });
+    }
+
+    bindDrop(dropA, fileA, nameA);
+    bindDrop(dropB, fileB, nameB);
+
+    submitBtn.addEventListener("click", async () => {
+      if (!fileA.files?.[0] || !fileB.files?.[0]) {
+        setStatus("请先上传两份文档文件。", false);
+        return;
+      }
+
+      submitBtn.disabled = true;
+      setStatus("正在分析，请稍候...", true);
+
+      try {
+        const form = new FormData();
+        form.append("fileA", fileA.files[0]);
+        form.append("fileB", fileB.files[0]);
+        form.append("outputDir", outputDir.value.trim());
+
+        const res = await fetch("/api/compare", {
+          method: "POST",
+          body: form,
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || "分析失败，请稍后重试。");
+        }
+
+        const diffCount = Number(data.diffCount || "0");
+        const outputPath = data.outputPath || "当前程序目录";
+
+        const suffix = diffCount === 0
+          ? "\n提示：本次未检测到差异（仅空格差异会被忽略）。"
+          : `\n共检测到 ${diffCount} 处差异。`;
+        setStatus(`分析完成，结果已保存。\n文件路径：${outputPath}${suffix}`, true);
+      } catch (err) {
+        setStatus(`分析失败：${err.message}`, false);
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
