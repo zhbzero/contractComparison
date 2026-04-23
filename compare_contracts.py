@@ -35,6 +35,9 @@ def normalize_text(text: str) -> str:
     text = re.sub(r"\s+", " ", text).strip()
     # 忽略中文字符之间的空格差异：例如 "其 他" -> "其他"
     text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
+    # 忽略数字前后空格：例如 "第 1 条" -> "第1条"、"100 元" -> "100元"
+    text = re.sub(r"(?<=\d)\s+(?=\D)", "", text)
+    text = re.sub(r"(?<=\D)\s+(?=\d)", "", text)
     # 忽略斜杠前后空格：例如 "A / B" -> "A/B"
     text = re.sub(r"\s*/\s*", "/", text)
     # 忽略标点前多余空格：例如 "其他： 。" -> "其他：。"
