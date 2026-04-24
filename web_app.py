@@ -62,7 +62,15 @@ def compare_api():
             return jsonify({"ok": False, "message": "两份文件完全一致，请确认上传了两个不同版本。"}), 400
 
         try:
-            diff_count = compare_contract_files(file_a_path, file_b_path, output_excel)
+            display_a = (file_a.filename or "").strip() or "第一份文档.docx"
+            display_b = (file_b.filename or "").strip() or "第二份文档.docx"
+            diff_count = compare_contract_files(
+                file_a_path,
+                file_b_path,
+                output_excel,
+                first_doc_name=display_a,
+                second_doc_name=display_b,
+            )
         except ComparisonRejectedError as exc:
             return jsonify({"ok": False, "message": str(exc)}), 400
         except Exception as exc:  # noqa: BLE001

@@ -1,8 +1,5 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
 import difflib
 import re
 import sys
@@ -65,9 +62,9 @@ def get_node_text(node: etree._Element) -> str:
 
 def _walk_blocks(
     node: etree._Element,
-    paragraphs: List[str],
-    cells: List[Tuple[str, str]],
-    table_counter: List[int],
+    paragraphs: list[str],
+    cells: list[tuple[str, str]],
+    table_counter: list[int],
 ) -> None:
     """
     深度遍历正文块级节点：
@@ -109,9 +106,9 @@ def _walk_blocks(
             _walk_blocks(child, paragraphs, cells, table_counter)
 
 
-def extract_paragraphs_and_cells(doc_path: Path) -> Tuple[List[str], List[Tuple[str, str]]]:
-    paragraphs: List[str] = []
-    cells: List[Tuple[str, str]] = []
+def extract_paragraphs_and_cells(doc_path: Path) -> tuple[list[str], list[tuple[str, str]]]:
+    paragraphs: list[str] = []
+    cells: list[tuple[str, str]] = []
     table_counter = [0]
 
     root = read_document_root(doc_path)
@@ -123,10 +120,10 @@ def extract_paragraphs_and_cells(doc_path: Path) -> Tuple[List[str], List[Tuple[
 
 
 def pair_similarity(
-    old_paragraphs: List[str],
-    old_cells: List[Tuple[str, str]],
-    new_paragraphs: List[str],
-    new_cells: List[Tuple[str, str]],
+    old_paragraphs: list[str],
+    old_cells: list[tuple[str, str]],
+    new_paragraphs: list[str],
+    new_cells: list[tuple[str, str]],
 ) -> float:
     """
     估算两份文档是否为同一 Word 文档的改版：综合「段落顺序」与「全文拼接」相似度，取较高值。
@@ -155,16 +152,16 @@ def pair_similarity(
 
 
 def compare_sequences(
-    old_items: List[str],
-    new_items: List[str],
+    old_items: list[str],
+    new_items: list[str],
     category: str,
     location_prefix: str,
-) -> List[DiffRecord]:
+) -> list[DiffRecord]:
     """
     比较两个一维序列（例如段落列表），输出增删改记录。
     基于 difflib 的 opcode 拆分，支持 replace / insert / delete。
     """
-    records: List[DiffRecord] = []
+    records: list[DiffRecord] = []
     matcher = difflib.SequenceMatcher(a=old_items, b=new_items, autojunk=False)
 
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
@@ -200,15 +197,15 @@ def compare_sequences(
 
 
 def compare_table_cells(
-    old_cells: List[Tuple[str, str]],
-    new_cells: List[Tuple[str, str]],
-) -> List[DiffRecord]:
+    old_cells: list[tuple[str, str]],
+    new_cells: list[tuple[str, str]],
+) -> list[DiffRecord]:
     """
     按单元格顺序比较表格内容。
     单元格位置相同但文本不同 => 修改；
     旧有新无 => 删除；旧无新有 => 新增。
     """
-    records: List[DiffRecord] = []
+    records: list[DiffRecord] = []
     max_len = max(len(old_cells), len(new_cells))
 
     for idx in range(max_len):
@@ -253,14 +250,19 @@ def compare_table_cells(
     return records
 
 
-def write_to_excel(records: List[DiffRecord], output_path: Path) -> None:
+def write_to_excel(
+    records: list[DiffRecord],
+    output_path: Path,
+    first_doc_name: str,
+    second_doc_name: str,
+) -> None:
     wb = Workbook()
 
     # 仅保留“修改项”sheet（按需求去掉“新增项”“删除项”）。
     ws_modify = wb.active
     ws_modify.title = "修改项"
 
-    headers = ["类别", "位置", "变更类型", "原文", "新文"]
+    headers = ["类别", "位置", "变更类型", first_doc_name, second_doc_name]
     ws_modify.append(headers)
 
     for record in records:
@@ -276,7 +278,13 @@ def write_to_excel(records: List[DiffRecord], output_path: Path) -> None:
     wb.save(str(output_path))
 
 
-def compare_contract_files(old_doc: Path, new_doc: Path, output_excel: Path) -> int:
+def compare_contract_files(
+    old_doc: Path,
+    new_doc: Path,
+    output_excel: Path,
+    first_doc_name: str | None = None,
+    second_doc_name: str | None = None,
+) -> int:
     """
     比较两份 Word 文档并导出 Excel。
     返回值为差异条目数量；当判定不是同一文档改版时抛出 ComparisonRejectedError。
@@ -297,7 +305,12 @@ def compare_contract_files(old_doc: Path, new_doc: Path, output_excel: Path) -> 
     )
     table_diffs = compare_table_cells(old_cells, new_cells)
     all_diffs = paragraph_diffs + table_diffs
-    write_to_excel(all_diffs, output_excel)
+    write_to_excel(
+        all_diffs,
+        output_excel,
+        first_doc_name=first_doc_name or old_doc.name,
+        second_doc_name=second_doc_name or new_doc.name,
+    )
     return len(all_diffs)
 
 
@@ -311,7 +324,7 @@ def get_runtime_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def detect_two_contract_docs(base_dir: Path) -> Tuple[Path, Path]:
+def detect_two_contract_docs(base_dir: Path) -> tuple[Path, Path]:
     """
     自动识别当前目录下的两份 Word 文档 docx（排除 Word 临时文件 ~$*）。
     识别顺序采用文件名升序：第一个=第一版，第二个=第二版。
@@ -330,7 +343,7 @@ def detect_two_contract_docs(base_dir: Path) -> Tuple[Path, Path]:
             "请保留两份文档后重试。"
         )
 
-    def _name_score(name: str, keywords: List[str]) -> int:
+    def _name_score(name: str, keywords: list[str]) -> int:
         return sum(1 for k in keywords if k in name)
 
     first_keywords = ["第一", "基准", "原版", "初版", "限制", "v1", "版本1", "old"]
